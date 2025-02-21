@@ -9,3 +9,5 @@ inst/doc
 /manuscript/
 /doc/
 /Meta/
+R/test.sqlite
+R/users.sqlite
