@@ -70,7 +70,7 @@ login_server <- function(
 		cookie_expiration = 30,
 		cookie_password = NULL,
 		username_label = 'E-Mail:',
-		password_label = 'Passwort:',
+		password_label = 'Passwort',
 		create_account_label = "Account erstellen",
 		create_account_message = NULL,
 		reset_email_message = NULL,
@@ -341,7 +341,7 @@ Wenn Sie nicht angefordert haben, Ihr Passwort zurückzusetzen, können Sie dies
 				args[[length(args) + 1]] <- actionButton(inputId = NS(id, 'send_new_user_code'),
 							 label = 'Code erneut senden')
 				args[[length(args) + 1]] <- actionButton(inputId = NS(id, 'submit_new_user_code'),
-							 label = 'Submit')
+							 label = 'Absenden')
 			}
 
 			do.call(enclosing_panel, args)
