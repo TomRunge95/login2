@@ -9,7 +9,10 @@ new_user_ui <- function(id) {
 	is_not_logged_in(
 		id = id,
 		htmltools::attachDependencies(
-			x = uiOutput(NS(id, 'new_user_ui')),
+			x = div(
+				style = 'background-color: #f0f0f0; padding: 20px;', # Optional: Hintergrundfarbe und Padding
+				uiOutput(NS(id, 'new_user_ui')) # Dein UI-Output für den neuen Benutzer
+			),
 			value = use_login(),
 			append = TRUE
 		)
