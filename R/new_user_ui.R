@@ -10,7 +10,7 @@ new_user_ui <- function(id) {
 		id = id,
 		htmltools::attachDependencies(
 			x = div(
-				style = 'background-color: #f0f0f0; padding: 20px;', # Optional: Hintergrundfarbe und Padding
+				style = 'background-color: #f0f0f0; padding: 20px;border-radius: 10px;', # Optional: Hintergrundfarbe und Padding
 				uiOutput(NS(id, 'new_user_ui')) # Dein UI-Output für den neuen Benutzer
 			),
 			value = use_login(),
