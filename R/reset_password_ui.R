@@ -18,4 +18,5 @@ reset_password_ui <- function(id) {
 			append = TRUE
 		)
 	)
+	)
 }
