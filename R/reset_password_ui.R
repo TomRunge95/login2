@@ -17,5 +17,5 @@ reset_password_ui <- function(id) {
 			value = use_login(),
 			append = TRUE
 		)
-	# )
+	)
 }
