@@ -9,7 +9,7 @@
 login_ui <- function(id) {
 	dependencies <- cookies::cookie_dependency()
 	dependencies[[length(dependencies) + 1]] <- use_login()
-	div(style = 'background-color: #f0f0f0; padding: 20px;',
+	div(style = 'background-color: #f0f0f0; padding: 20px;border-radius: 10px;',
 		# This is a hack to ensure that this is re-evaluated when the logged_in variable changes
 		div(textOutput(NS(id, 'logged_in')), style = 'visibility: hidden;'),
 		conditionalPanel(
