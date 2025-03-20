@@ -56,6 +56,7 @@
 #' @importFrom sodium data_decrypt data_encrypt sha256 bin2hex hex2bin
 #' @export
 #' @example inst/login_demo_simple/app.R
+#' aa
 login_server <- function(
 		id,
 		db_conn = NULL,
