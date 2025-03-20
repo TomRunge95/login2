@@ -126,10 +126,23 @@ Wenn Sie nicht angefordert haben, Ihr Passwort zurückzusetzen, können Sie dies
 	}
 
 	moduleServer(id, function(input, output, session) {
+		# Hash function for email/username
+		hash_email <- function(email) {
+			email |>
+				tolower() |>
+				charToRaw() |>
+				sodium::sha256() |>
+				sodium::bin2hex()
+		}
+
+		# Create a lookup table to store email-to-hashed email mapping during session
+		email_mapping <- reactiveVal(list())
+
 		# Check to see if the users_table is already in the database, if not
 		# create the table.
 		if(!users_table %in% DBI::dbListTables(db_conn)) {
-			users <- data.frame(username = character(),
+			users <- data.frame(username = character(),  # This will store hashed emails
+								email_sent_to = character(), # This will store the original email only during registration
 								password = character(),
 								created_date = numeric(),
 								stringsAsFactors = FALSE)
@@ -139,10 +152,17 @@ Wenn Sie nicht angefordert haben, Ihr Passwort zurückzusetzen, können Sie dies
 				}
 			}
 			DBI::dbWriteTable(db_conn, users_table, users)
+		} else {
+			# Check if email_sent_to column exists, add if not
+			users_columns <- names(DBI::dbReadTable(db_conn, users_table))
+			if(!"email_sent_to" %in% users_columns) {
+				DBI::dbSendQuery(db_conn,
+								 paste0("ALTER TABLE ", users_table, " ADD COLUMN email_sent_to TEXT"))
+			}
 		}
 
 		if(!activity_table %in% DBI::dbListTables(db_conn)) {
-			activity <- data.frame(username = character(),
+			activity <- data.frame(username = character(),  # This will store hashed emails
 								   action = character(),
 								   timestamp = numeric(),
 								   stringsAsFactors = FALSE)
@@ -171,10 +191,10 @@ Wenn Sie nicht angefordert haben, Ihr Passwort zurückzusetzen, können Sie dies
 			DBI::dbReadTable(db_conn, users_table)
 		}
 
-		get_user <- function(username) {
+		get_user <- function(username_hash) {
 			user <- DBI::dbSendQuery(
 				db_conn,
-				paste0("SELECT * FROM ", users_table, " WHERE username='", username, "'")
+				paste0("SELECT * FROM ", users_table, " WHERE username='", username_hash, "'")
 			) |> DBI::dbFetch()
 			return(user)
 		}
@@ -193,6 +213,7 @@ Wenn Sie nicht angefordert haben, Ihr Passwort zurückzusetzen, können Sie dies
 		USER$logged_in <- FALSE
 		USER$unique <- format(Sys.time(), '%Y%m%d%H%M%S')
 		USER$username <- NA
+		USER$email <- NA  # Store the actual email for application use
 		for(i in additional_fields) {
 			USER[[i]] <- NA
 		}
@@ -202,26 +223,27 @@ Wenn Sie nicht angefordert haben, Ihr Passwort zurückzusetzen, können Sie dies
 		})
 
 		observeEvent(cookies::get_cookie(cookie_name = cookie_name, session = session), {
-			username <- cookies::get_cookie(cookie_name = cookie_name, session = session)
+			cookie_value <- cookies::get_cookie(cookie_name = cookie_name, session = session)
 			tryCatch({
 				if(!is.null(cookie_key)) {
-					username <- decrypt_cookie(username)
+					cookie_value <- decrypt_cookie(cookie_value)
+				}
+
+				# The cookie_value is now the hashed email
+				user <- get_user(cookie_value)
+				if(nrow(user) > 0) {
+					USER$username <- cookie_value  # Store the hash
+					USER$email <- user$email_sent_to  # Store the email if available
+					USER$logged_in <- TRUE
+					for(i in names(additional_fields)) {
+						USER[[i]] <- user[1,i]
+					}
+					add_activitiy(cookie_value, 'login_cookie')
 				}
 			}, error = function(e) {
 				warning(paste0('Error retrieving cookie value.'))
 				cookies::remove_cookie(cookie_name = cookie_name)
 			})
-			if(!is.null(username)) {
-				user <- get_user(username)
-				if(nrow(user) > 0) {
-					USER$username <- username
-					USER$logged_in <- TRUE
-					for(i in names(additional_fields)) {
-						USER[[i]] <- user[1,i]
-					}
-					add_activitiy(username, 'login_cookie')
-				}
-			}
 		}, once = TRUE)
 
 		##### User Login #######################################################
@@ -238,8 +260,6 @@ Wenn Sie nicht angefordert haben, Ihr Passwort zurückzusetzen, können Sie dies
 				passwdInput(NS(id, 'password'), label = password_label, value = '')
 			)
 
-
-
 			args[[length(args) + 1]] <- actionButton(NS(id, "Login"),
 													 label = 'Login',
 													 value = TRUE)
@@ -249,19 +269,23 @@ Wenn Sie nicht angefordert haben, Ihr Passwort zurückzusetzen, können Sie dies
 
 		observeEvent(input$Login, {
 			users <- get_users()
-			username <- input$username
+			email <- input$username
+			email_hash <- hash_email(email)
 			password <- get_password(input$password)
-			Id.username <- which(tolower(users$username) == tolower(username))
-			if(is.null(Id.username) | length(Id.username) != 1) {
+
+			# Find user by the hash, not the email itself
+			Id.username <- which(users$username == email_hash)
+
+			if(length(Id.username) != 1) {
 				login_message('Username nicht gefunden.')
 			} else if(password != users[Id.username,]$password) {
 				login_message('Inkorrektes Passwort')
 			} else {
 				if(!is.null(input$remember_me)) {
 					if(input$remember_me) {
-						cookie_value <- username
+						cookie_value <- email_hash  # Store the hash, not the email
 						if(!is.null(cookie_key)) {
-							cookie_value <- encrypt_cookie(username)
+							cookie_value <- encrypt_cookie(email_hash)
 						}
 						tryCatch({
 							cookies::set_cookie(cookie_name = cookie_name,
@@ -273,13 +297,20 @@ Wenn Sie nicht angefordert haben, Ihr Passwort zurückzusetzen, können Sie dies
 						})
 					}
 				}
+
+				# Update email mapping for this session
+				current_mapping <- email_mapping()
+				current_mapping[[email_hash]] <- email
+				email_mapping(current_mapping)
+
 				login_message('')
 				USER$logged_in <- TRUE
-				USER$username <- username
+				USER$username <- email_hash  # Store the hash
+				USER$email <- email  # Store the actual email for application use
 				for(i in names(additional_fields)) {
 					USER[[i]] <- users[Id.username, i]
 				}
-				add_activitiy(username, 'login')
+				add_activitiy(email_hash, 'login')
 			}
 		})
 
@@ -288,6 +319,7 @@ Wenn Sie nicht angefordert haben, Ihr Passwort zurückzusetzen, können Sie dies
 			add_activitiy(USER$username, 'logout')
 			USER$logged_in <- FALSE
 			USER$username <- ''
+			USER$email <- ''
 			USER$unique <- format(Sys.time(), '%Y%m%d%H%M%S')
 			for(i in names(additional_fields)) {
 				USER[[i]] <- NA
@@ -305,6 +337,7 @@ Wenn Sie nicht angefordert haben, Ihr Passwort zurückzusetzen, können Sie dies
 		new_user_message <- reactiveVal('')
 		new_user_values <- reactiveVal(data.frame())
 		new_user_code_verify <- reactiveVal('')
+		new_user_email <- reactiveVal('')
 
 		output$new_user_message <- renderText({
 			new_user_message()
@@ -317,11 +350,11 @@ Wenn Sie nicht angefordert haben, Ihr Passwort zurückzusetzen, können Sie dies
 			)
 			if(new_user_code_verify() == '') {
 				args[[length(args) + 1]] <- textInput(inputId = NS(id, 'new_username'),
-							  label = username_label, value = '')
+													  label = username_label, value = '')
 				args[[length(args) + 1]] <- passwdInput(inputId = NS(id, 'new_password1'),
-								label = password_label, value = '')
+														label = password_label, value = '')
 				args[[length(args) + 1]] <- passwdInput(inputId = NS(id, 'new_password2'),
-								label = paste0(password_label, " bestätigen"), value = '')
+														label = paste0(password_label, " bestätigen"), value = '')
 
 				if(!is.null(additional_fields)) {
 					for(i in seq_len(length(additional_fields))) {
@@ -339,9 +372,9 @@ Wenn Sie nicht angefordert haben, Ihr Passwort zurückzusetzen, können Sie dies
 							  value = '')
 				)
 				args[[length(args) + 1]] <- actionButton(inputId = NS(id, 'send_new_user_code'),
-							 label = 'Code erneut senden')
+														 label = 'Code erneut senden')
 				args[[length(args) + 1]] <- actionButton(inputId = NS(id, 'submit_new_user_code'),
-							 label = 'Absenden')
+														 label = 'Absenden')
 			}
 
 			do.call(enclosing_panel, args)
@@ -349,21 +382,25 @@ Wenn Sie nicht angefordert haben, Ihr Passwort zurückzusetzen, können Sie dies
 
 		observeEvent(input$new_user, {
 			users <- get_users()
-			username <- input$new_username
+			email <- input$new_username
+			email_hash <- hash_email(email)
 			password1 <- get_password(input$new_password1)
 			password2 <- get_password(input$new_password2)
 
-			id.username <- which(tolower(users$username) == tolower(username))
+			# Check if email hash exists in database
+			id.username <- which(users$username == email_hash)
+
 			if(length(id.username) > 0) {
-				new_user_message(paste0('Account exisitiert bereits für ', username))
+				new_user_message(paste0('Account exisitiert bereits für ', email))
 			} else if(password1 != password2) {
 				new_user_message('Passwörter stimmen nicht überein.')
-			} else if(input$new_password1 == 'd41d8cd98f00b204e9800998ecf8427e') {
-				# Check for a blank password
+			} else if(input$new_password1 == '') {
 				new_user_message('Bitte geben Sie ein korrektes Passwort ein.')
 			} else {
+				# Store both the hash and the original email
 				newuser <- data.frame(
-					username = username,
+					username = email_hash,  # Store hash in username field
+					email_sent_to = email,  # Store original email temporarily
 					password = password1,
 					created_date = Sys.time(),
 					stringsAsFactors = FALSE
@@ -379,12 +416,15 @@ Wenn Sie nicht angefordert haben, Ihr Passwort zurückzusetzen, können Sie dies
 					newuser[,i] <- NA # Make sure the data.frames line up
 				}
 
+				# Save the email for later use in this session
+				new_user_email(email)
+
 				if(verify_email) {
 					shinybusy::show_spinner()
 					new_user_values(newuser)
 					code <- generate_code()
 					tryCatch({
-						emailer(to_email = username,
+						emailer(to_email = email,
 								subject = new_account_subject,
 								message = sprintf(create_account_message, code))
 						new_user_code_verify(code)
@@ -396,7 +436,7 @@ Wenn Sie nicht angefordert haben, Ihr Passwort zurückzusetzen, können Sie dies
 				} else {
 					add_user(newuser)
 					add_activitiy(newuser[1,]$username, 'create_account')
-					new_user_message(paste0('Neuer Account wurde erstellt für: ', username,
+					new_user_message(paste0('Neuer Account wurde erstellt für: ', email,
 											'. Sie können sich nun einloggen.'))
 				}
 			}
@@ -405,17 +445,26 @@ Wenn Sie nicht angefordert haben, Ihr Passwort zurückzusetzen, können Sie dies
 		observeEvent(input$submit_new_user_code, {
 			if(input$submit_new_user_code == 1) {
 				code <- isolate(input$new_user_code)
-				if(nchar(code) != 6 & reset_code() == code) {
+				if(nchar(code) != 6 | reset_code() != code) {
 					new_user_message('Code ist nicht korrekt')
 				} else {
 					newuser <- new_user_values()
+
+					# Update email mapping for this session
+					email <- newuser$email_sent_to
+					email_hash <- newuser$username
+					current_mapping <- email_mapping()
+					current_mapping[[email_hash]] <- email
+					email_mapping(current_mapping)
+
+					# Add user to database
 					add_user(newuser)
 					new_user_values(data.frame())
 					new_user_code_verify('')
 					new_user_message(paste0('Neuer Account wurde erstellt für: ',
-											newuser[1,'username'],
+											email,
 											'. Sie können sich nun einloggen.'))
-					add_activitiy(newuser[1,]$username, 'create_account')
+					add_activitiy(email_hash, 'create_account')
 				}
 			}
 		})
@@ -425,7 +474,7 @@ Wenn Sie nicht angefordert haben, Ihr Passwort zurückzusetzen, können Sie dies
 				shinybusy::show_spinner()
 				code <- generate_code()
 				newuser <- new_user_values()
-				email_address <- newuser[1,]$username
+				email_address <- newuser[1,]$email_sent_to
 				emailer(to_email = email_address,
 						subject = new_account_subject,
 						message = sprintf(create_account_message, code))
@@ -444,6 +493,7 @@ Wenn Sie nicht angefordert haben, Ihr Passwort zurückzusetzen, können Sie dies
 		reset_code_verify <- reactiveVal('')
 		reset_message <- reactiveVal('')
 		reset_username <- reactiveVal('')
+		reset_email <- reactiveVal('')
 
 		output$reset_password_ui <- renderUI({
 			if(is.null(emailer)) {
@@ -515,7 +565,7 @@ Wenn Sie nicht angefordert haben, Ihr Passwort zurückzusetzen, können Sie dies
 		observeEvent(input$reset_new_password, {
 			if(input$reset_password1 == input$reset_password2) {
 				query <- paste0(
-					"UPDATE users SET password = '",
+					"UPDATE ", users_table, " SET password = '",
 					get_password(input$reset_password1),
 					"' WHERE username = '", reset_username(), "'"
 				)
@@ -529,17 +579,31 @@ Wenn Sie nicht angefordert haben, Ihr Passwort zurückzusetzen, können Sie dies
 		})
 
 		observeEvent(input$send_reset_password_code, {
-			PASSWORD <- DBI::dbReadTable(db_conn, users_table)
-			email_address <- isolate(input$forgot_password_email) |> tolower()
-			if(!email_address %in% PASSWORD$username) {
-				reset_message(paste0(email_address, ' not found.'))
+			email_address <- isolate(input$forgot_password_email)
+			email_hash <- hash_email(email_address)
+
+			# Get user by hash
+			user <- get_user(email_hash)
+
+			if(nrow(user) == 0) {
+				reset_message(paste0(email_address, ' nicht gefunden.'))
 			} else {
 				code <- generate_code()
 				shinybusy::show_spinner()
 				tryCatch({
-					username <- PASSWORD[PASSWORD$username == email_address,]$username[1]
-					reset_username(username)
-					emailer(to_email = email_address,
+					# Check if we have the original email
+					if(!is.na(user$email_sent_to) && user$email_sent_to != "") {
+						# Use the stored email
+						email_to_use <- user$email_sent_to
+					} else {
+						# Use the provided email
+						email_to_use <- email_address
+					}
+
+					reset_username(email_hash)
+					reset_email(email_to_use)
+
+					emailer(to_email = email_to_use,
 							subject = reset_password_subject,
 							message = sprintf(reset_email_message, code))
 					reset_code(code)
@@ -549,6 +613,20 @@ Wenn Sie nicht angefordert haben, Ihr Passwort zurückzusetzen, können Sie dies
 				shinybusy::hide_spinner()
 			}
 		})
+
+		# Clean up task: After account is created and verified,
+		# you can remove the email from database to only keep the hash
+		# This can be scheduled or triggered at a specific time
+		clean_emails <- function() {
+			tryCatch({
+				query <- paste0("UPDATE ", users_table, " SET email_sent_to = NULL WHERE email_sent_to IS NOT NULL")
+				DBI::dbSendQuery(db_conn, query)
+			}, error = function(e) {
+				message(paste0("Error cleaning emails: ", as.character(e)))
+			})
+		}
+
+		# You could call clean_emails() function after confirmation or at a regular interval
 
 		return(USER)
 	})
