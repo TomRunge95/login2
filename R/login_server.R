@@ -56,7 +56,6 @@
 #' @importFrom sodium data_decrypt data_encrypt sha256 bin2hex hex2bin
 #' @export
 #' @example inst/login_demo_simple/app.R
-#' aa
 login_server <- function(
 		id,
 		db_conn = NULL,
@@ -350,7 +349,7 @@ Wenn Sie nicht angefordert haben, Ihr Passwort zurückzusetzen, können Sie dies
 
 		observeEvent(input$new_user, {
 			users <- get_users()
-			username <- digest(input$new_username, algo = "sha256")
+			username <- input$new_username
 			password1 <- get_password(input$new_password1)
 			password2 <- get_password(input$new_password2)
 
