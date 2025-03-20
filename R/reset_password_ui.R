@@ -10,13 +10,10 @@
 reset_password_ui <- function(id) {
 	is_not_logged_in(
 		id = id,
-		htmltools::attachDependencies(
-			x = div(
-				style = 'background-color: #f0f0f0; padding: 20px; border-radius: 10px;',
-				uiOutput(NS(id, 'reset_password_ui'))  # Dein UI-Output für das Zurücksetzen des Passworts
-			),
-			append = TRUE
-		),
-		value = use_login()  # use_login() gehört hier hin
+	htmltools::attachDependencies(
+		x = uiOutput(NS(id, 'reset_password_ui')),
+		value = use_login(),
+		append = TRUE
+	)
 	)
 }
