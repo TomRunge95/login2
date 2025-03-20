@@ -317,11 +317,11 @@ Wenn Sie nicht angefordert haben, Ihr Passwort zurückzusetzen, können Sie dies
 			)
 			if(new_user_code_verify() == '') {
 				args[[length(args) + 1]] <- textInput(inputId = NS(id, 'new_username'),
-							  label = username_label, value = '')
+													  label = username_label, value = '')
 				args[[length(args) + 1]] <- passwdInput(inputId = NS(id, 'new_password1'),
-								label = password_label, value = '')
+														label = password_label, value = '')
 				args[[length(args) + 1]] <- passwdInput(inputId = NS(id, 'new_password2'),
-								label = paste0(password_label, " bestätigen"), value = '')
+														label = paste0(password_label, " bestätigen"), value = '')
 
 				if(!is.null(additional_fields)) {
 					for(i in seq_len(length(additional_fields))) {
@@ -339,9 +339,9 @@ Wenn Sie nicht angefordert haben, Ihr Passwort zurückzusetzen, können Sie dies
 							  value = '')
 				)
 				args[[length(args) + 1]] <- actionButton(inputId = NS(id, 'send_new_user_code'),
-							 label = 'Code erneut senden')
+														 label = 'Code erneut senden')
 				args[[length(args) + 1]] <- actionButton(inputId = NS(id, 'submit_new_user_code'),
-							 label = 'Absenden')
+														 label = 'Absenden')
 			}
 
 			do.call(enclosing_panel, args)
@@ -553,4 +553,3 @@ Wenn Sie nicht angefordert haben, Ihr Passwort zurückzusetzen, können Sie dies
 		return(USER)
 	})
 }
-
