@@ -14,10 +14,9 @@ reset_password_ui <- function(id) {
 			x = div(
 				style = 'background-color: #f0f0f0; padding: 20px;border-radius: 10px;',
 				uiOutput(NS(id, 'reset_password_ui')),
-			value = use_login(),
+			# value = use_login(),
 			append = TRUE
 		)
 	)
 	)
-
 }
