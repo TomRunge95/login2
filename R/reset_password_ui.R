@@ -8,14 +8,12 @@
 #' @return a `shiny` object containing the input fields for a user to reset their password.
 #' @export
 reset_password_ui <- function(id) {
-<<<<<<< HEAD
-	# is_not_logged_in(
-	# 	id = id,
+	is_not_logged_in(
+		id = id,
 	htmltools::attachDependencies(
 		x = uiOutput(NS(id, 'reset_password_ui')),
 		value = use_login(),
 		append = TRUE
-=======
 	is_not_logged_in(
 		id = id,
 		htmltools::attachDependencies(
@@ -26,7 +24,6 @@ reset_password_ui <- function(id) {
 			append = TRUE
 		)
 	)
->>>>>>> parent of 1d0c1eb... Update reset_password_ui.R
 	)
-	# )
+	)
 }
