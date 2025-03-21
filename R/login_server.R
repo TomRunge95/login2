@@ -280,7 +280,6 @@ Wenn Sie nicht angefordert haben, Ihr Passwort zurückzusetzen, können Sie dies
 				reset_message('Die Passwörter stimmen nicht überein.')
 			}
 		})
-	})
 
 		return(USER)
 	})
